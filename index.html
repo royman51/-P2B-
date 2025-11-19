@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>크레이즈 놀이터 : 오프라인</title>
+<link rel="stylesheet" href="style.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.158.0",
+    "three/examples/jsm/controls/OrbitControls": "https://esm.sh/three@0.158.0/examples/jsm/controls/OrbitControls"
+  }
+}
+</script>
+</head>
+<body>
+<div id="topbar" aria-hidden="false">
+  <button class="toolIcon" id="toolRescale" title="Rescale" data-desc="원하는 파트를 누른뒤 점을 당겨 그 부분을 원본 블록과 같은 성질로 채울수있습니다.">
+    <img src="/rescale.png" alt="rescale" />
+    <div class="toolLabel">크기 재조정</div>
+  </button>
+  <button class="toolIcon" id="toolPaint" title="Paint" data-desc="파트의 색상을 정의합니다. 설치된 파트를 누르고 색상을 선택할시 해당 파트의 색상을 재정의합니다.">
+    <img src="/paint_tool.png" alt="paint" />
+    <div class="toolLabel">페인트</div>
+  </button>
+  <button class="toolIcon" id="toolMaterial" title="Material" data-desc="파트의 재질을 정의합니다. 설치된 파트를 누르고 재질을 선택할시 해당 파트의 재질을 재정의합니다.">
+    <img src="/material.png" alt="material" />
+    <div class="toolLabel">재질</div>
+  </button>
+  <button class="toolIcon" id="toolSetting" title="Settings" data-desc="테마, 그리드 표시등을 설정할수있습니다.">
+    <img src="/setting.png" alt="settings" />
+    <div class="toolLabel">설정</div>
+  </button>
+  <button class="toolIcon" id="toolJson" title="JSON" data-desc="배치된 블록의 JSON을 추출하거나 불러오는 도구입니다. 'JSON 적용'을 누르면 적용됩니다.">
+    <img src="/json.png" alt="json" />
+    <div class="toolLabel">B2J / 저장</div>
+  </button>
+</div>
+
+<div id="topright" aria-hidden="false">
+  <button class="toolIcon" id="toolDestroy" title="Destroy" data-desc="블록 삭제 도구 (선택 후 클릭하여 삭제)">
+    <img src="/destroy.png" alt="destroy" />
+    <div class="toolLabel">삭제</div>
+  </button>
+</div>
+
+<div id="brand" aria-hidden="false">
+  <button id="musicToggle" aria-pressed="true" title="배경음악 켜기/끄기">
+    <img id="musicToggleIcon" src="/MUS_ON.png" alt="music on" />
+    <div id="musicToggleLabel" class="brandSub">음악 : 켜짐</div>
+  </button>
+</div>
+
+<!-- tooltip element injected for hover descriptions -->
+<div id="toolTip" class="hidden" aria-hidden="true"></div>
+
+<div id="ui">
+  <div id="palette">
+    <!-- paletteHeader moved to top-left brand element -->
+
+    <!-- GRID PANELS: materials | theme | size | colors | json -->
+    <div id="panels">
+      <section id="materialsPanel" class="panel" data-area="materials">
+        <label class="panelTitle">재질</label>
+        <div id="materialsList" class="materialsList row"></div>
+      </section>
+
+      <section id="settingsPanel" class="panel" data-area="settings">
+        <label class="panelTitle">설정</label>
+        <div class="panelContent" style="display:flex;flex-direction:column;gap:8px;">
+          <div class="row" style="align-items:center;">
+            <button id="themeBtn" class="smallBtn">Light</button>
+            <div class="muted small" style="margin-left:auto">배경 색상 전환</div>
+          </div>
+
+          <div style="margin-top:4px;font-size:13px;color:var(--muted)">그리드 표시</div>
+          <div class="row" style="gap:10px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px"><input type="radio" name="gridMode" value="normal" checked/> 일반</label>
+            <label style="display:flex;align-items:center;gap:8px"><input type="radio" name="gridMode" value="translucent"/> 반투명</label>
+            <label style="display:flex;align-items:center;gap:8px"><input type="radio" name="gridMode" value="hidden"/> 숨기기</label>
+          </div>
+        </div>
+      </section>
+
+      <section id="sizePanel" class="panel" data-area="size">
+        <label class="panelTitle">크기 (균일)</label>
+        <div class="panelContent row">
+          <input id="size" type="number" value="3" min="3" step="3"/>
+        </div>
+      </section>
+
+      <section id="colorsPanel" class="panel" data-area="colors">
+        <label class="panelTitle">색상 (인덱스 선택)</label>
+        <div id="colors" class="row colorsRow"></div>
+        <div class="row" style="margin-top:8px;align-items:center;">
+          <input id="customColor" type="color" value="#f2f3f3" />
+          <input id="customHex" type="text" value="#F2F3F3" />
+          <button id="useCustomBtn" class="smallBtn">적용</button>
+        </div>
+      </section>
+
+      <section id="jsonPanel" class="panel" data-area="json">
+        <label class="panelTitle">배치된 블록 JSON</label>
+        <textarea id="jsonOut"></textarea>
+        <div class="row" style="margin-top:8px;gap:8px">
+          <button id="applyJsonBtn" class="smallBtn">JSON 적용</button>
+          <button id="copyBtn" class="smallBtn">JSON 복사</button>
+          <button id="removeBtn" class="smallBtn alt">선택 삭제</button>
+          <button id="clearBtn" class="smallBtn alt">모두 삭제</button>
+        </div>
+      </section>
+
+      <!-- Destroy panel -->
+      <section id="destroyPanel" class="panel hidden" data-area="destroy">
+        <div class="row" style="width:100%;align-items:center;justify-content:space-between;">
+          <div style="font-size:14px;color:var(--muted);">블록을 클릭해서 삭제하세요.</div>
+          <div>
+            <button id="destroyAllBtn" class="smallBtn alt">모두 삭제</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
+
