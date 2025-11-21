@@ -179,35 +179,40 @@ input[type=text]{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,
   gap:8px;
   pointer-events:auto;
 }
-#musicToggle{
-  display:flex;
+#brand #musicToggle{
+  /* keep markup for accessibility but let .toolIcon provide the primary visuals */
+  display:inline-flex;
   align-items:center;
   gap:8px;
+  padding:6px;
+  border-radius:12px;
   background:transparent;
   border:0;
-  padding:6px;
-  border-radius:8px;
   cursor:pointer;
   color:var(--accent);
   text-align:left;
   -webkit-tap-highlight-color: rgba(0,0,0,0.06);
 }
-#musicToggle img{
-  width:34px;
-  height:34px;
+#brand #musicToggle img,
+#brand #musicToggle #musicToggleIcon{
+  width:36px;
+  height:36px;
   object-fit:contain;
   display:block;
 }
-#musicToggleLabel{
+#brand #musicToggle .toolLabel,
+#brand #musicToggle #musicToggleLabel{
   font-size:12px;
   color:var(--muted);
 }
-#musicToggle.muted #musicToggleIcon,
-#musicToggle.muted img{
+
+/* preserve muted opacity behavior when the button itself is muted */
+#brand #musicToggle.muted img,
+#brand #musicToggle.muted #musicToggleIcon{
   opacity:0.45;
 }
 
-/* Top toolbar for tools */
+/* Top toolbar for tools: switch to a two-row centered layout */
 #topbar{
   position:fixed;
   top:12px;
@@ -215,54 +220,94 @@ input[type=text]{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,
   transform:translateX(-50%);
   z-index:60;
   display:flex;
-  gap:12px;
+  flex-direction:column;
+  gap:8px;
   align-items:center;
   pointer-events:auto;
+  transition: opacity 0.6s ease, transform 0.6s ease, visibility 0.6s ease;
+  opacity: 1;
+  visibility: visible;
 }
+
+/* Hidden state before Play -> keep out of hit-test and visually offscreen */
+#topbar.topbar-hidden{
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* each row holds a set of icons */
+.topbar-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  justify-content:center;
+}
+
+/* left group inside first row (keeps main tool icons grouped) */
+.topbar-left{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:center;
+}
+
+/* center group inside second row for settings / B2J / music */
+.topbar-center{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:center;
+}
+
+/* ensure toolbar right column aligns horizontally (prevents B2J stacking) */
+#topbar-right-column{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:center;
+}
+
+/* general tool icon styling so music toggle matches other buttons */
 .toolIcon{
-  width:56px;
-  height:56px;
+  width:64px;
+  height:64px;
   padding:8px;
-  border-radius:50%;
+  border-radius:12px;
   border:1px solid rgba(0,0,0,0.06);
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.03));
+  background:var(--panel);
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  flex-direction:column;
+  gap:6px;
   cursor:pointer;
   box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+  color:var(--accent);
 }
-.toolIcon img{ width:30px;height:30px; object-fit:contain; display:block; filter: none; }
-/* active state stays similar but softer for circular buttons */
-.toolIcon.active{
-  box-shadow: 0 14px 34px rgba(30,144,255,0.14);
-  background: linear-gradient(180deg, rgba(30,144,255,0.08), rgba(30,144,255,0.03));
-  border-color: rgba(30,144,255,0.22);
+.toolIcon img{
+  width:36px;
+  height:36px;
+  object-fit:contain;
+  display:block;
 }
-
-/* labels under topbar icons */
-.toolIcon{ flex-direction:column; gap:6px; position:relative; padding:8px 6px; }
 .toolIcon .toolLabel{
   font-size:12px;
   color:var(--muted);
   margin-top:4px;
-  pointer-events:none;
-  user-select:none;
-  text-align:center;
+  line-height:1;
 }
 
-/* adjust topbar centering and spacing so bottom UI looks centered vs top icons */
-#topbar{
-  position:fixed;
-  top:12px;
-  left:50%;
-  transform:translateX(-50%);
-  z-index:60;
-  display:flex;
-  gap:12px;
-  align-items:center;
-  pointer-events:auto;
+/* preserve existing music-specific muted rules but keep them compatible */
+#musicToggle.muted img,
+#musicToggle.muted #musicToggleIcon{
+  opacity:0.45;
 }
+
+/* spacer to keep first row centered visually when rows differ */
+.topbar-spacer{ flex:1; min-width:12px; }
 
 /* ensure tooltip is readable on light theme */
 body.light #toolTip{
@@ -274,6 +319,49 @@ body.light #toolTip{
   #topbar{ top:8px; left:50%; transform:translateX(-50%); gap:6px; }
   .toolIcon{ width:56px;height:56px;padding:8px;border-radius:50%; }
   .toolIcon img{ width:28px;height:28px; }
+}
+
+/* Long toggle button for second topbar row */
+#topbar-row2-toggle-container{
+  margin-top:6px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  pointer-events:auto;
+}
+/* make the toggle visually longer and flat while keeping .toolIcon visuals */
+.openToggle{
+  width: 160px;
+  height: 44px;
+  border-radius: 10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:6px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  border:1px solid rgba(255,255,255,0.03);
+  font-size:18px;
+  font-weight:600;
+  color:var(--muted);
+}
+.openToggle #topbarRow2ToggleIcon{
+  font-size:18px;
+  line-height:1;
+  transform: none;
+  display:inline-block;
+  pointer-events:none;
+}
+
+/* When open, slightly change background and caret color for affordance */
+#topbar.row2-open .openToggle{
+  background: linear-gradient(180deg, rgba(30,144,255,0.12), rgba(30,144,255,0.06));
+  color:var(--btn-text);
+  border-color: rgba(30,144,255,0.18);
+}
+#topbar.row2-open .openToggle #topbarRow2ToggleIcon{
+  color:var(--btn-text);
 }
 
 /* Top-right destroy button container */
@@ -365,3 +453,92 @@ body.light #toolTip{
 
 /* Ensure no vertical scrolling is required for main experience (UI limited to a portion of screen) */
 html, body { overscroll-behavior-y: none; }
+
+/* ------------------ Splash / Game Menu styles ------------------ */
+#splash{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  /* make splash fully transparent so underlying canvas shows through */
+  /* translucent overlay that softly blurs the scene behind the menu */
+  background: rgba(6,10,12,0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+#splash.splash-hidden{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+#splash .splash-inner{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+  padding:28px;
+  border-radius:14px;
+  /* slightly translucent card look */
+  /* keep card shell visually minimal so logo/play images appear over transparent backgrounds */
+  /* Remove any visual shell so images are placed directly with no background */
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: translateY(0);
+}
+
+/* logo sizing */
+#splashLogo{
+  width: min(58vw, 420px);
+  max-width: 420px;
+  height: auto;
+  display:block;
+  -webkit-user-drag: none;
+  /* force any image background to be transparent in layout */
+  background: transparent !important;
+  /* in case the image contains an embedded opaque background, ensure surrounding element shows none */
+  image-rendering: auto;
+}
+
+/* play button styling (uses provided image, keep its own look but ensure touch targets are large) */
+.splash-play{
+  border:0;
+  background:transparent;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.06);
+  width:220px;
+  height:62px;
+  border-radius:12px;
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 240ms ease;
+  /* ensure the play button has no background shell or shadow so only the image shows */
+  box-shadow: none !important;
+  border: none !important;
+}
+.splash-play img{ width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; 
+  /* ensure play button image displays without any background behind it */
+  background: transparent !important;
+  /* remove any default image smoothing backgrounds */
+  -webkit-background-clip: padding-box;
+  background-clip: padding-box;
+}
+#splash .splash-inner img { background: transparent !important; border: none !important; box-shadow: none !important; }
+/* pressed/tap feedback */
+.splash-play:active{ transform: translateY(2px) scale(0.995); box-shadow: 0 8px 18px rgba(0,0,0,0.45); }
+
+/* smaller screens adjustments */
+@media (max-width:540px){
+  #splash .splash-inner{ padding:18px; gap:12px; }
+  .splash-play{ width:180px; height:56px; }
+  #splashLogo{ width: min(78vw, 360px); }
+}

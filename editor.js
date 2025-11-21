@@ -16,7 +16,7 @@ renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 // add subtle exponential fog so distant objects fade naturally
-scene.fog = new THREE.FogExp2(0x0b0f12, 0.0009);
+scene.fog = new THREE.FogExp2(0xFFFFFF, 0.0009);
 
 // Camera
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -26,8 +26,9 @@ camera.position.set(12, 12, 12);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1, 0);
 controls.enableDamping = true;
-controls.minPolarAngle = 0.2;
-controls.maxPolarAngle = Math.PI / 2 - 0.05;
+// Allow looking fully upward and downward by expanding polar angle limits
+controls.minPolarAngle = 0.0;
+controls.maxPolarAngle = Math.PI - 0.05;
 controls.update();
 
 // Lights
@@ -50,7 +51,8 @@ const GRID_SIZE = 198;
 const GRID_DIVISIONS = GRID_SIZE / GRID_UNIT;
 // create grid with white lines (both grid and center) so it starts white reliably
 export const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0xffffff, 0xffffff);
-grid.position.y = 0;
+// SHIFT GRID UP BY +1 TO ALIGN WITH IMPORT/EXPORT BASELINE
+grid.position.y = 1;
 grid.position.x = GRID_UNIT / 2;
 grid.position.z = GRID_UNIT / 2;
 scene.add(grid);
@@ -85,7 +87,8 @@ export const ground = new THREE.Mesh(
 );
 ground.rotation.x = -Math.PI / 2;
 ground.name = "ground";
-ground.position.y = -0.01; // slight offset so plane sits under grid lines
+// MOVE GROUND UP SO ITS SURFACE MATCHES THE NEW GRID Y (+1) WITH A VERY SMALL OFFSET
+ground.position.y = 0.99; // grid at y=1, plane just beneath so raycasts hit grid/top surfaces cleanly
 scene.add(ground);
 
 // --- Clouds: flattened-white-cube clusters that drift slowly across the sky ---
@@ -211,6 +214,13 @@ export function setToolMode(mode){
     removeGrowHandles();
   }
 }
+
+// NEW: place/installation mode flag (true = allow placement). Default ON.
+export let placeMode = true;
+export function setPlaceMode(on){
+  placeMode = !!on;
+}
+
 // simple paint state for rescale tool
 let isPainting = false;
 // map to track which block ids were painted in current drag so we don't duplicate
@@ -378,9 +388,23 @@ export function placeBlockAt(px, py, pz, sx, sy, sz, materialOrColor, matName){
     mat.emissive = new THREE.Color(0xEDEDED);
     mat.emissiveIntensity = 0.12;
   }
+
+  // --- NEW: ensure any captured blockColorRgb is normalized to 0..1 floats ---
+  if(Array.isArray(blockColorRgb)){
+    // If values look like 0..255 integers, convert to 0..1
+    const needsDivide = blockColorRgb.some(v => typeof v === 'number' && v > 1.001);
+    if(needsDivide){
+      blockColorRgb = blockColorRgb.map(v => Math.max(0, Math.min(1, Number(v) / 255)));
+    } else {
+      // coerce to numbers and clamp 0..1
+      blockColorRgb = blockColorRgb.map(v => Math.max(0, Math.min(1, Number(v) || 0)));
+    }
+  }
+
   const m = new THREE.Mesh(geom, mat);
   // place at final world position center
-  const centerY = py + sy / 2;
+  // ADD A GLOBAL +1 OFFSET TO THE BASE Y (py) SO EVERY PLACED BLOCK IS OFFSET UP BY 1
+  const centerY = (py + 1) + sy / 2;
   m.position.set(px, centerY, pz);
   m.userData = {
     // store exact center coordinates (avoid premature rounding that can introduce half-unit offsets)
@@ -390,6 +414,18 @@ export function placeBlockAt(px, py, pz, sx, sy, sz, materialOrColor, matName){
     M: matName || (materialOrColor && materialOrColor.name) || null
   };
   m.castShadow = true;
+
+  // apply any previously-stored transparency flag if present in userData (newly placed blocks won't have it)
+  if(typeof m.userData.T === 'number' && m.userData.T >= 0){
+    // if material supports transparency, set it
+    try{
+      if(m.material){
+        m.material.transparent = m.userData.T < 1.0;
+        m.material.opacity = Math.max(0, Math.min(1, Number(m.userData.T)));
+        m.material.needsUpdate = true;
+      }
+    }catch(e){}
+  }
 
   // Placement animation: start smaller and slightly lower, then ease to final scale/position.
   // We store animation meta-data in userData so animate() can tween it each frame.
@@ -423,10 +459,23 @@ export function updateJSON(){
     const ud = m.userData;
     if(!ud) continue;
     // use compact keys: P,S,C,M,E,T,K,A (omit defaults)
-    const P = ud.P ? ud.P.map(v=>Math.round(v)) : [0,0,0];
+    // Export Y as editor's internal Y + 1 to match external JSON baseline
+    const P = ud.P ? [ Math.round(ud.P[0]), Math.round(ud.P[1]) + 1, Math.round(ud.P[2]) ] : [0,1,0];
     const S = ud.S ? ud.S.map(v=>Math.round(v)) : [GRID_UNIT, GRID_UNIT, GRID_UNIT];
-    const C = ud.C ? ud.C.slice(0,3) : null;
+    let C = ud.C ? ud.C.slice(0,3) : null;
     const M = ud.M || null;
+
+    // --- NEW: ensure exported color C is normalized 0..1 and rounded ---
+    if(C){
+      // If values appear in 0..255, normalize; otherwise clamp and round to 3 decimals
+      const needsDivide = C.some(v => typeof v === 'number' && v > 1.001);
+      if(needsDivide){
+        C = C.map(v => Math.max(0, Math.min(1, v / 255)));
+      } else {
+        C = C.map(v => Math.max(0, Math.min(1, v)));
+      }
+      C = C.map(v => Math.round(v * 1000) / 1000);
+    }
 
     const obj = {};
     // position & size always present
@@ -589,18 +638,13 @@ function onPointerDown(ev){
   }
 
   // existing grow handle / placement logic follows when not in rescale tool
-  // check grow handles first
-  // only allow grow-handle interaction when rescale tool is active
-  // (handleIntersects already handled above for rescale mode; for completeness keep a no-op here)
-  // const handleIntersects = (toolMode === 'rescale') ? raycaster.intersectObjects(growHandlesGroup.children, false) : [];
-  // if(handleIntersects.length){
-  //   ...
-  // }
-
   const intersects = raycaster.intersectObjects(blocksGroup.children.concat([ground]), false);
   if(intersects.length){
     const i = intersects[0];
     if(i.object === ground){
+      // if placement mode is OFF, do not place new blocks on ground
+      if(!placeMode) return;
+
       const hit = i.point;
       // allow exact integer sizes (>=1) from the size input
       const raw = parseFloat(document.getElementById("size").value) || 1;
@@ -646,9 +690,12 @@ function onPointerDown(ev){
       const hitObj = i.object;
       const topY = hitObj.position.y + ((hitObj.userData && hitObj.userData.S) ? hitObj.userData.S[1]/2 : GRID_UNIT/2);
       const faceNormalWorld = i.face ? i.face.normal.clone().transformDirection(hitObj.matrixWorld) : null;
-      const clickedTop = faceNormalWorld ? Math.abs(faceNormalWorld.y) > 0.7 && faceNormalWorld.y > 0 : false;
+      const clickedTop = faceNormalWorld ? (faceNormalWorld.y > 0.9) : false;
 
       if(clickedTop){
+        // if placement mode is OFF, do not place new blocks on top
+        if(!placeMode) return;
+
         // place block on top of this block
         const hit = i.point;
         const raw = parseFloat(document.getElementById("size").value) || 1;
@@ -656,8 +703,11 @@ function onPointerDown(ev){
         // snap using this block's grid unit
         const px = snap(hit.x, s);
         const pz = snap(hit.z, s);
-        const py = Math.round(topY); // base y (ground-level) where the new block should sit
-        
+        const pyTop = Math.round(topY); // top surface world Y
+
+        // COMPENSATE for editor's internal +1 offset: pass baseY = topSurfaceY - 1
+        const basePy = pyTop - 1;
+
         const mat = getSelectedMaterial();
         const colorOverride = getCurrentColorOverride();
         
@@ -665,33 +715,103 @@ function onPointerDown(ev){
         let matName = selectedMaterialName;
 
         if (!materialOrColor) {
-          materialOrColor = colorOverride || [0.95, 0.95, 0.95];
+          materialOrColor = colorOverride || [0.95, 0.95, 0.95]; // Use color override or default white
           matName = null;
         }
-        
-        placeBlockAt(px, snap(py, s), pz, s, s, s, materialOrColor, matName);
+
+        placeBlockAt(px, snap(basePy, s), pz, s, s, s, materialOrColor, matName);
         
         return;
       }
 
       // NEW: if user clicked a side face (not the top), place a block adjacent to that face
-      const isSideFace = faceNormalWorld ? Math.abs(faceNormalWorld.y) <= 0.7 : false;
+      // Prevent diagonal placement by only treating the hit as a side-face if the world normal
+      // is strongly aligned to one primary axis (dominant component).
+      const isSideFace = (function(){
+        if(!faceNormalWorld) return false;
+        // normalize to be safe
+        const n = faceNormalWorld.clone().normalize();
+        const ax = Math.abs(n.x), ay = Math.abs(n.y), az = Math.abs(n.z);
+        // REJECT nearly-vertical hits aggressively to avoid edge/corner ambiguity
+        if(ay > 0.4) return false;
+        // require very strong dominance to avoid diagonal cases (tighten threshold)
+        const dominant = Math.max(ax, az);
+        if(dominant < 0.995) return false;
+        // ensure the non-dominant horizontal component is very small to avoid diagonal cases
+        if(ax > az){
+          return ax > 0.995 && az < 0.08;
+        } else {
+          return az > 0.995 && ax < 0.08;
+        }
+      })();
+
       if(isSideFace){
+        // if placement mode is OFF, do not place adjacent blocks
+        if(!placeMode) return;
+
         const hitPoint = i.point.clone();
         const raw = parseFloat(document.getElementById("size").value) || 1;
         const s = Math.max(1, Math.round(raw));
 
         // direction in world space pointing outward from the face
-        const dir = faceNormalWorld.clone().normalize();
+        // snap direction to the primary axis to avoid diagonal offsets
+        let dir = faceNormalWorld.clone().normalize();
+        // choose dominant axis and snap dir to exact axis-aligned vector
+        if(Math.abs(dir.x) > Math.abs(dir.z)){
+          dir.set(Math.sign(dir.x), 0, 0);
+        } else {
+          dir.set(0, 0, Math.sign(dir.z));
+        }
 
         // compute new block center by offsetting half size along face normal
-        const center = hitPoint.add(dir.multiplyScalar(s / 2));
+        const center = hitPoint.clone().add(dir.clone().multiplyScalar(s / 2));
 
         // snap to grid in whole GRID_UNIT steps to avoid half-unit offsets
         const px = snap(center.x, s);
         const pz = snap(center.z, s);
         const pyCenter = Math.round(center.y);
-        const basePy = Math.round(pyCenter - (s / 2));
+        const basePyCandidate = Math.round(pyCenter - (s / 2));
+
+        // COMPENSATE for editor's internal +1 offset: subtract 1 from baseY
+        const basePy = basePyCandidate - 1;
+
+        // Helper: check for cardinal (non-diagonal) neighbor blocks at the target base cell
+        function hasCardinalNeighborAt(x, baseY, z){
+          // convert target base cell into expected center coordinates for comparison
+          // centerY = baseY + halfHeight + 1 (editor stores centers with +1 offset applied on placement)
+          const half = Math.round(s) / 2;
+          const targetCenterY = baseY + 1 + half;
+          // check the four cardinal offsets (±GRID_UNIT in x or z)
+          const offsets = [
+            {dx: GRID_UNIT, dz: 0},
+            {dx: -GRID_UNIT, dz: 0},
+            {dx: 0, dz: GRID_UNIT},
+            {dx: 0, dz: -GRID_UNIT}
+          ];
+          for(const off of offsets){
+            const tx = Math.round(x + off.dx);
+            const tz = Math.round(z + off.dz);
+            // iterate blocks to see if any block has center matching tx,tz and shares the same baseY
+            for(const b of blocksGroup.children){
+              const ud = b.userData || {};
+              if(!ud.P || !ud.S) continue;
+              const bx = Math.round(ud.P[0]);
+              const bz = Math.round(ud.P[2]);
+              const bHalf = (ud.S && ud.S[1]) ? ud.S[1] / 2 : (GRID_UNIT/2);
+              const bBaseY = Math.round(ud.P[1] - bHalf);
+              // compare coordinates (allow exact grid-aligned equality)
+              if(bx === tx && bz === tz && bBaseY === baseY){
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
+        // Only allow placement when at least one cardinal neighbor exists (reject diagonal-only adjacency)
+        if(!hasCardinalNeighborAt(px, basePy, pz)){
+          return;
+        }
 
         const mat = getSelectedMaterial();
         const colorOverride = getCurrentColorOverride();
@@ -863,14 +983,17 @@ function onPointerUp(ev){
       
       for(let i=1;i<=count;i++){
         const pos = activeGrow.startCenter.clone().add(axisVec.clone().multiplyScalar(i * GRID_UNIT));
-        const baseX = Math.round(pos.x);
-        const baseZ = Math.round(pos.z);
-        const baseY = Math.round(pos.y - activeGrow.mesh.userData.S[1]/2);
+        // Snap horizontal positions to GRID_UNIT to align with grid baseline
+        const baseX = snap(pos.x, GRID_UNIT);
+        const baseZ = snap(pos.z, GRID_UNIT);
+        // Compute base Y (ground/base) from center and snap to GRID_UNIT as well.
+        // Use center.y - halfHeight to obtain base, then snap so final placement aligns to grid baseline.
+        const baseY = snap(Math.round(pos.y - activeGrow.mesh.userData.S[1]/2), GRID_UNIT);
         
         // Pass materialOrColor and matName explicitly. 
         placeBlockAt(baseX, baseY, baseZ, s, s, s, materialOrColor, matName);
       }
-      
+
       // Restore global color override state
       setCurrentColorOverride(originalOverride);
 
@@ -1200,7 +1323,11 @@ export function startEditor(){
     // grid mode
     setGridMode,
     // expose setToolMode to wireUI via startEditor export mapping (already done in startEditor)
-    setToolMode
+    setToolMode,
+    // NEW: place mode API
+    setPlaceMode, placeMode,
+    // NEW: transparency API
+    setBlockTransparency
   });
 }
 
@@ -1215,4 +1342,28 @@ export function getSelectedMaterial(){
 }
 export function setSelectedMaterial(name){
   selectedMaterialName = name && materials[name] ? name : null;
+}
+
+// NEW: set transparency on a given mesh (value in 0..1). If null, clears transparency flag.
+export function setBlockTransparency(mesh, value){
+  if(!mesh || !mesh.material) return;
+  const v = (typeof value === 'number') ? Math.max(0, Math.min(1, value)) : null;
+  try{
+    // clone material to avoid shared material side-effects
+    const newMat = mesh.material.clone ? mesh.material.clone() : mesh.material;
+    if(v === null){
+      // clear transparency -> fully opaque
+      newMat.transparent = false;
+      newMat.opacity = 1.0;
+      if(mesh.userData) delete mesh.userData.T;
+    } else {
+      newMat.transparent = v < 1.0;
+      newMat.opacity = v;
+      if(mesh.userData) mesh.userData.T = Math.round(v * 1000) / 1000;
+    }
+    // apply material
+    mesh.material = newMat;
+    // ensure update to JSON export
+    updateJSON();
+  }catch(e){}
 }

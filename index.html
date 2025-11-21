@@ -15,40 +15,92 @@
 </script>
 </head>
 <body>
-<div id="topbar" aria-hidden="false">
-  <button class="toolIcon" id="toolRescale" title="Rescale" data-desc="원하는 파트를 누른뒤 점을 당겨 그 부분을 원본 블록과 같은 성질로 채울수있습니다.">
-    <img src="/rescale.png" alt="rescale" />
-    <div class="toolLabel">크기 재조정</div>
-  </button>
-  <button class="toolIcon" id="toolPaint" title="Paint" data-desc="파트의 색상을 정의합니다. 설치된 파트를 누르고 색상을 선택할시 해당 파트의 색상을 재정의합니다.">
-    <img src="/paint_tool.png" alt="paint" />
-    <div class="toolLabel">페인트</div>
-  </button>
-  <button class="toolIcon" id="toolMaterial" title="Material" data-desc="파트의 재질을 정의합니다. 설치된 파트를 누르고 재질을 선택할시 해당 파트의 재질을 재정의합니다.">
-    <img src="/material.png" alt="material" />
-    <div class="toolLabel">재질</div>
-  </button>
-  <button class="toolIcon" id="toolSetting" title="Settings" data-desc="테마, 그리드 표시등을 설정할수있습니다.">
-    <img src="/setting.png" alt="settings" />
-    <div class="toolLabel">설정</div>
-  </button>
-  <button class="toolIcon" id="toolJson" title="JSON" data-desc="배치된 블록의 JSON을 추출하거나 불러오는 도구입니다. 'JSON 적용'을 누르면 적용됩니다.">
+<!-- Splash / Game Menu overlay -->
+<div id="splash" aria-hidden="false">
+  <div class="splash-inner">
+    <img id="splashLogo" src="/playground_logo.png" alt="playground logo" />
+    <button id="splashPlay" class="splash-play" aria-label="Play">
+      <img src="/play_button_ahh.png" alt="플레이 버튼" />
+    </button>
+  </div>
+</div>
+
+<div id="topbar" class="topbar-hidden" aria-hidden="false">
+  <div id="topbar-row1" class="topbar-row">
+    <div class="topbar-left">
+      <button class="toolIcon" id="toolRescale" title="Rescale" data-desc="원하는 파트를 누른뒤 점을 당겨 그 부분을 원본 블록과 같은 성질로 채울수있습니다.">
+        <img src="/rescale.png" alt="rescale" />
+        <div class="toolLabel">크기 재조정</div>
+      </button>
+
+      <!-- NEW: Place (install) toggle button -->
+      <button class="toolIcon" id="toolPlace" title="Place 모드 (설치 켜기/끄기)" data-desc="설치 모드가 꺼져있으면 블록을 새로 설치할 수 없습니다.">
+        <img src="/PLACE_ON.png" alt="place on" />
+        <div class="toolLabel">설치</div>
+      </button>
+
+      <button class="toolIcon" id="toolPaint" title="Paint" data-desc="파트의 색상을 정의합니다. 설치된 파트를 누르고 색상을 선택할시 해당 파트의 색상을 재정의합니다.">
+        <img src="/paint_tool.png" alt="paint" />
+        <div class="toolLabel">페인트</div>
+      </button>
+      <button class="toolIcon" id="toolMaterial" title="Material" data-desc="파트의 재질을 정의합니다. 설치된 파트를 누르고 재질을 선택할시 해당 파트의 재질을 재정의합니다.">
+        <img src="/material.png" alt="material" />
+        <div class="toolLabel">재질</div>
+      </button>
+
+      <!-- MOVED: 삭제 (Destroy) button moved into central topbar -->
+      <button class="toolIcon" id="toolDestroy" title="Destroy" data-desc="블록 삭제 도구 (선택 후 클릭하여 삭제)">
+        <img src="/destroy.png" alt="destroy" />
+        <div class="toolLabel">삭제</div>
+      </button>
+    </div>
+
+    <div class="topbar-spacer"></div>
+  </div>
+
+  <!-- second centered row for setting / B2J / music -->
+  <div id="topbar-row2" class="topbar-row">
+    <div class="topbar-center">
+      <button class="toolIcon" id="toolSetting" title="Settings" data-desc="테마, 그리드 표시등을 설정할수있습니다.">
+        <img src="/setting.png" alt="settings" />
+        <div class="toolLabel">설정</div>
+      </button>
+
+      <div id="topbar-right-column" aria-hidden="false">
+        <button class="toolIcon" id="toolJson" title="JSON" data-desc="배치된 블록의 JSON을 추출하거나 불러오는 도구입니다. 'JSON 적용'을 누르면 적용됩니다.">
+          <img src="/json.png" alt="json" />
+          <div class="toolLabel">B2J / 저장</div>
+        </button>
+
+        <button id="musicToggle" class="toolIcon" aria-pressed="true" title="배경음악 켜기/끄기" data-desc="배경 음악을 켜거나 끕니다.">
+          <img id="musicToggleIcon" src="/MUS_ON.png" alt="music on" />
+          <div id="musicToggleLabel" class="toolLabel">음악</div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toggle button to expand/collapse the second row (closed by default) -->
+  <div id="topbar-row2-toggle-container" style="pointer-events:auto;">
+    <button id="topbarRow2Toggle" class="openToggle toolIcon" aria-expanded="false" title="열기/접기">
+      <span id="topbarRow2ToggleIcon" aria-hidden="true">︿</span>
+    </button>
+  </div>
+</div>
+
+<div id="topright" aria-hidden="true" style="display:none;">
+  <!-- kept for backward compatibility but hidden; topbar-right-column now holds JSON -->
+  <button class="toolIcon" id="toolJson_legacy" style="display:none;">
     <img src="/json.png" alt="json" />
     <div class="toolLabel">B2J / 저장</div>
   </button>
 </div>
 
-<div id="topright" aria-hidden="false">
-  <button class="toolIcon" id="toolDestroy" title="Destroy" data-desc="블록 삭제 도구 (선택 후 클릭하여 삭제)">
-    <img src="/destroy.png" alt="destroy" />
-    <div class="toolLabel">삭제</div>
-  </button>
-</div>
-
-<div id="brand" aria-hidden="false">
-  <button id="musicToggle" aria-pressed="true" title="배경음악 켜기/끄기">
-    <img id="musicToggleIcon" src="/MUS_ON.png" alt="music on" />
-    <div id="musicToggleLabel" class="brandSub">음악 : 켜짐</div>
+<div id="brand" aria-hidden="true" style="display:none;">
+  <!-- legacy music toggle moved into topbar -->
+  <button id="musicToggle_legacy" aria-pressed="true" title="배경음악 켜기/끄기" style="display:none;">
+    <img id="musicToggleIcon_legacy" src="/MUS_ON.png" alt="music on" />
+    <div id="musicToggleLabel_legacy" class="brandSub">음악 : 켜짐</div>
   </button>
 </div>
 
@@ -83,13 +135,6 @@
         </div>
       </section>
 
-      <section id="sizePanel" class="panel" data-area="size">
-        <label class="panelTitle">크기 (균일)</label>
-        <div class="panelContent row">
-          <input id="size" type="number" value="3" min="3" step="3"/>
-        </div>
-      </section>
-
       <section id="colorsPanel" class="panel" data-area="colors">
         <label class="panelTitle">색상 (인덱스 선택)</label>
         <div id="colors" class="row colorsRow"></div>
@@ -100,12 +145,20 @@
         </div>
       </section>
 
+      <!-- NOTE: size input moved into Place panel UI; keep hidden size input so scripts can reference it -->
+      <input id="size" type="number" value="3" min="1" step="1" style="display:none"/>
+
       <section id="jsonPanel" class="panel" data-area="json">
         <label class="panelTitle">배치된 블록 JSON</label>
         <textarea id="jsonOut"></textarea>
         <div class="row" style="margin-top:8px;gap:8px">
           <button id="applyJsonBtn" class="smallBtn">JSON 적용</button>
           <button id="copyBtn" class="smallBtn">JSON 복사</button>
+          <button id="downloadJsonBtn" class="smallBtn">JSON 다운로드</button>
+          <label class="smallBtn alt" for="uploadJsonInput" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:8px 10px;border-radius:10px;">
+            JSON 업로드
+            <input id="uploadJsonInput" type="file" accept=".txt,application/json" style="display:none" />
+          </label>
           <button id="removeBtn" class="smallBtn alt">선택 삭제</button>
           <button id="clearBtn" class="smallBtn alt">모두 삭제</button>
         </div>
@@ -128,6 +181,120 @@
 <canvas id="c"></canvas>
 
 <script type="module" src="app.js"></script>
+
+<script>
+// Toggle the second topbar row open/closed.
+// Default: closed. Long press not required; button is elongated visually per request.
+(function(){
+  const toggleBtn = document.getElementById('topbarRow2Toggle');
+  const topbar = document.getElementById('topbar');
+  const row2 = document.getElementById('topbar-row2');
+
+  if(!toggleBtn || !topbar || !row2) return;
+
+  // start closed
+  topbar.classList.remove('row2-open');
+  row2.dataset.open = 'false';
+  row2.style.display = 'none';
+  const icon = document.getElementById('topbarRow2ToggleIcon');
+
+  function setOpen(open){
+    if(open){
+      topbar.classList.add('row2-open');
+      row2.style.display = 'flex';
+      toggleBtn.setAttribute('aria-expanded','true');
+      row2.dataset.open = 'true';
+      if(icon) icon.textContent = '︿'; // closed/up caret when open (swapped)
+    } else {
+      topbar.classList.remove('row2-open');
+      row2.style.display = 'none';
+      toggleBtn.setAttribute('aria-expanded','false');
+      row2.dataset.open = 'false';
+      if(icon) icon.textContent = '∨'; // open/down caret when closed (swapped)
+    }
+  }
+
+  // initialize
+  setOpen(false);
+
+  toggleBtn.addEventListener('click',(e)=>{
+    e.preventDefault();
+    const cur = row2.dataset.open === 'true';
+    setOpen(!cur);
+  });
+
+  // support long-press toggle by treating long press same as click (optional UX)
+  let pressTimer = null;
+  toggleBtn.addEventListener('pointerdown', (ev)=>{
+    if(pressTimer) clearTimeout(pressTimer);
+    pressTimer = setTimeout(()=> {
+      // long-press toggles as well (same action)
+      const cur = row2.dataset.open === 'true';
+      setOpen(!cur);
+    }, 650);
+  });
+  window.addEventListener('pointerup', ()=>{ if(pressTimer) { clearTimeout(pressTimer); pressTimer = null; } });
+})();
+</script>
+
+<!-- Splash behavior script: fade blur and start app on Play -->
+<script>
+(function(){
+  const splash = document.getElementById('splash');
+  const play = document.getElementById('splashPlay');
+
+  if(!splash || !play) return;
+
+  function endSplash(){
+    // fade out splash
+    splash.classList.add('splash-hidden');
+    // try to resume background music if available
+    try{
+      if(window.__backgroundMusic){
+        window.__backgroundMusic.play().catch(()=>{});
+      }
+    }catch(e){}
+    // notify app that play was pressed (UI or other modules can listen)
+    window.dispatchEvent(new CustomEvent('app:play'));
+    // remove overlay from DOM after animation to avoid capturing pointer events
+    setTimeout(()=>{ if(splash && splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
+  }
+
+  play.addEventListener('click', (e)=>{
+    e.preventDefault();
+    endSplash();
+  });
+
+  // allow Enter/Space to activate when focused
+  play.addEventListener('keydown', (ev)=>{
+    if(ev.key === 'Enter' || ev.key === ' '){
+      ev.preventDefault();
+      endSplash();
+    }
+  });
+
+  // accessibility: focus play button
+  play.focus();
+})();
+</script>
+
+<!-- NEW: Show topbar after play with fade-in -->
+<script>
+(function(){
+  const topbar = document.getElementById('topbar');
+  if(!topbar) return;
+  // Ensure hidden state at start (class already set in markup), then listen for app:play to reveal
+  window.addEventListener('app:play', ()=>{
+    // small delay so splash removal animation finishes before topbar fades in
+    setTimeout(()=>{
+      topbar.classList.remove('topbar-hidden');
+      // update aria-hidden for accessibility
+      topbar.setAttribute('aria-hidden','false');
+    }, 120);
+  }, { once: true });
+})();
+</script>
+
 </body>
 </html>
 

@@ -199,49 +199,8 @@ export function wireUI(editor){
     colorsEl.appendChild(el);
   });
 
-  // --- NEW: Paint panel block size picker (1 / 3 / 5) ---
-  (function addPaintSizePicker(){
-    const sizeRow = document.createElement('div');
-    sizeRow.style.display = 'flex';
-    sizeRow.style.gap = '8px';
-    sizeRow.style.marginTop = '8px';
-    sizeRow.style.justifyContent = 'center';
-    const sizes = [1,3,5];
-    sizes.forEach(sz=>{
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'smallBtn';
-      btn.style.padding = '8px 12px';
-      btn.textContent = sz.toString();
-      btn.title = `블록 크기 ${sz} (${sz},${sz},${sz})`;
-      btn.addEventListener('click', ()=>{
-        const sizeEl = document.getElementById('size');
-        if(sizeEl){
-          // set exact requested size (1,3,5) — editor placement will now accept integer sizes >= 1
-          sizeEl.value = Math.round(sz);
-          // trigger change so UI normalizes value
-          sizeEl.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      });
-      sizeRow.appendChild(btn);
-    });
-    // add a small label above buttons
-    const wrapper = document.createElement('div');
-    wrapper.style.display = 'flex';
-    wrapper.style.flexDirection = 'column';
-    wrapper.style.alignItems = 'center';
-    const label = document.createElement('div');
-    label.style.fontSize = '13px';
-    label.style.color = 'var(--muted)';
-    label.style.marginTop = '10px';
-    label.textContent = '블록 크기 선택';
-    wrapper.appendChild(label);
-    wrapper.appendChild(sizeRow);
-    // append to colors panel area
-    colorsEl.parentNode && colorsEl.parentNode.appendChild(wrapper);
-  })();
-  // --- end size picker ---
-  
+  // (Block size selector moved to Place panel below)
+
   const customColorInput = document.getElementById('customColor');
   const customHexInput = document.getElementById('customHex');
   const useCustomBtn = document.getElementById('useCustomBtn');
@@ -250,52 +209,103 @@ export function wireUI(editor){
   customColorInput.value = customColorHex;
   customHexInput.value = customColorHex;
 
-  customColorInput.addEventListener('input', (e)=>{
-    customColorHex = e.target.value.toUpperCase();
-    customHexInput.value = customColorHex;
-  });
-  customHexInput.addEventListener('change', (e)=>{
-    let v = e.target.value.trim();
-    if(!v.startsWith('#')) v = '#'+v;
-    if(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(v)){
-      customColorHex = v.toUpperCase();
-      customColorInput.value = customColorHex;
-    }else{
-      e.target.value = customColorHex;
-    }
-  });
+  // helper to parse hex (#fff or #ffffff) into normalized rgb array
+  function hexToRgbNorm(hex){
+    if(!hex) return [1,1,1];
+    hex = hex.replace('#','');
+    if(hex.length === 3) hex = hex.split('').map(s=>s+s).join('');
+    if(!/^[0-9A-Fa-f]{6}$/.test(hex)) return [1,1,1];
+    const r = parseInt(hex.substring(0,2),16)/255;
+    const g = parseInt(hex.substring(2,4),16)/255;
+    const b = parseInt(hex.substring(4,6),16)/255;
+    return [r,g,b];
+  }
 
-  useCustomBtn.addEventListener('click', ()=>{
-    useCustom = true;
-    selectedColorIdx = -1;
-    document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("selected"));
-    customColorHex = customHexInput.value.toUpperCase();
-    if(!customColorHex.startsWith('#')) customColorHex = '#'+customColorHex;
+  // ensure there is a persistent custom swatch element (will be created once)
+  let customSwatchEl = document.getElementById('custom-swatch');
+  function ensureCustomSwatch(){
+    if(customSwatchEl) return customSwatchEl;
+    customSwatchEl = document.createElement('div');
+    customSwatchEl.id = 'custom-swatch';
+    customSwatchEl.className = 'color-swatch';
+    customSwatchEl.title = '사용자 색상';
+    // when clicked it becomes selected like other swatches
+    customSwatchEl.addEventListener('click', ()=>{
+      document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("selected"));
+      customSwatchEl.classList.add('selected');
+      selectedColorIdx = -1;
+      useCustom = true;
+      // set override in editor from current swatch color
+      const hex = customHexInput.value.replace('#','');
+      const rgb = hexToRgbNorm(hex);
+      if(editor.setCurrentColorOverride) editor.setCurrentColorOverride(rgb);
+      // apply to selected block immediately
+      try{ const sel = editor.selectedMeshRef && editor.selectedMeshRef(); if(sel){ if(sel.material) try{ sel.material.dispose && sel.material.dispose(); }catch(e){} sel.material = new THREE.MeshStandardMaterial({ color: new THREE.Color(rgb[0],rgb[1],rgb[2]) }); try{ sel.material.emissive = new THREE.Color(rgb[0],rgb[1],rgb[2]); sel.material.emissiveIntensity = 0.06; }catch(e){} sel.userData.C = rgb.slice(0,3).map(v=>Math.round(v*1000)/1000); sel.userData.M = null; if(editor.updateJSON) editor.updateJSON(); } }catch(e){}
+    });
+    // add at start of colors container so custom appears first
+    colorsEl.insertBefore(customSwatchEl, colorsEl.firstChild);
+    return customSwatchEl;
+  }
+
+  // update custom swatch visuals & apply color immediately whenever inputs change
+  function applyCustomHex(hex){
+    if(!hex) return;
+    if(!hex.startsWith('#')) hex = '#'+hex;
+    // validate
+    if(!/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex)) return;
+    customColorHex = hex.toUpperCase();
     customColorInput.value = customColorHex;
-    const hex = customColorHex.replace('#','');
-    const rgb = hex.length===3
-      ? [parseInt(hex[0]+hex[0],16)/255, parseInt(hex[1]+hex[1],16)/255, parseInt(hex[2]+hex[2],16)/255]
-      : [parseInt(hex.substring(0,2),16)/255, parseInt(hex.substring(2,4),16)/255, parseInt(hex.substring(4,6),16)/255];
+    customHexInput.value = customColorHex;
+    const rgb = hexToRgbNorm(customColorHex);
+    // store as active override
     if(editor.setCurrentColorOverride) editor.setCurrentColorOverride(rgb);
-
-    // If a block is selected, apply this custom color immediately
+    // ensure swatch exists and update its background
+    const sw = ensureCustomSwatch();
+    sw.style.background = `rgb(${Math.round(rgb[0]*255)},${Math.round(rgb[1]*255)},${Math.round(rgb[2]*255)})`;
+    // auto-select the custom swatch visually
+    document.querySelectorAll(".color-swatch").forEach(s=>s.classList.remove("selected"));
+    sw.classList.add('selected');
+    selectedColorIdx = -1;
+    useCustom = true;
+    // apply to any selected block immediately
     try{
       const sel = editor.selectedMeshRef && editor.selectedMeshRef();
       if(sel){
-        if(sel.material){
-          try{ sel.material.dispose && sel.material.dispose(); }catch(e){}
-        }
+        if(sel.material) try{ sel.material.dispose && sel.material.dispose(); }catch(e){}
         const col = new THREE.Color(rgb[0], rgb[1], rgb[2]);
         sel.material = new THREE.MeshStandardMaterial({ color: col.clone(), roughness:0.6, metalness:0.0 });
         try{ sel.material.emissive = col.clone(); sel.material.emissiveIntensity = 0.06; }catch(e){}
-        // store original emissive so highlight restore works correctly
         try { sel.userData._origEmissive = sel.material.emissive.clone(); } catch(e){}
         sel.userData.C = rgb.slice(0,3).map(v=>Math.round(v*1000)/1000);
         sel.userData.M = null;
         if(editor.updateJSON) editor.updateJSON();
       }
     }catch(e){}
+  }
+
+  // wire inputs to apply immediately
+  customColorInput.addEventListener('input', (e)=>{
+    const v = (e.target.value||'').toUpperCase();
+    applyCustomHex(v);
   });
+  customHexInput.addEventListener('change', (e)=>{
+    let v = e.target.value.trim();
+    if(!v.startsWith('#')) v = '#'+v;
+    if(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(v)){
+      applyCustomHex(v.toUpperCase());
+    } else {
+      // revert to last valid
+      e.target.value = customColorHex;
+    }
+  });
+
+  // keep the existing Apply button for explicit UX but make it call same behavior (backwards-compatible)
+  useCustomBtn.addEventListener('click', ()=>{
+    const hex = customHexInput.value || customColorInput.value || customColorHex;
+    applyCustomHex(hex);
+  });
+
+  // (Transparency controls removed)
 
   // size, remove, clear, copy JSON
   const sizeInput = document.getElementById("size");
@@ -342,7 +352,120 @@ export function wireUI(editor){
     }catch(e){}
   });
 
+  // NEW: Download JSON as .txt
+  const downloadBtn = document.getElementById('downloadJsonBtn');
+  if(downloadBtn){
+    downloadBtn.addEventListener('click', ()=>{
+      const data = jsonOut.value || '';
+      const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'blocks.json.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      downloadBtn.textContent = "다운로드됨";
+      setTimeout(()=>downloadBtn.textContent="JSON 다운로드",900);
+    });
+  }
+
+  // NEW: Upload JSON from .txt or .json file
+  const uploadInput = document.getElementById('uploadJsonInput');
+  if(uploadInput){
+    uploadInput.addEventListener('change', async (ev)=>{
+      const f = ev.target.files && ev.target.files[0];
+      if(!f) return;
+      try{
+        const text = await f.text();
+        // Try to parse to provide quick feedback; if parse fails, still place raw into textarea for user edit
+        try{
+          const parsed = JSON.parse(text);
+          // Normalize imported JSON (accept Position/Size/Color/Anchored/CanCollide/Transparency/Editable/Material)
+          const normalized = normalizeImportedArray(parsed);
+          // pretty-print normalized for clarity
+          jsonOut.value = JSON.stringify(normalized);
+        }catch(e){
+          // if it's not valid JSON, place raw text so user can edit/correct
+          jsonOut.value = text;
+        }
+        // small visual feedback
+        uploadInput.value = '';
+      }catch(e){}
+    });
+  }
+
   // Apply user-edited JSON into scene
+
+  // --- NEW: normalize imported JSON to engine-compact keys (only on import) ---
+  function normalizeImportedArray(arr){
+    if(!Array.isArray(arr)) return [];
+    const out = [];
+    arr.forEach(blockData=>{
+      if(!blockData || typeof blockData !== 'object') return;
+      // POSITION
+      const posT = blockData.P || blockData.Position || blockData.Pos;
+      if(!posT) return;
+      const px = (typeof posT[0] === 'number') ? posT[0] : (posT.X || 0);
+      const py = (typeof posT[1] === 'number') ? posT[1] : (posT.Y || 0);
+      const pz = (typeof posT[2] === 'number') ? posT[2] : (posT.Z || 0);
+
+      // SIZE
+      const sizeT = blockData.S || blockData.Size;
+      if(!sizeT) return;
+      const sx = (typeof sizeT[0] === 'number') ? sizeT[0] : (sizeT.X || 1);
+      const sy = (typeof sizeT[1] === 'number') ? sizeT[1] : (sizeT.Y || 1);
+      const sz = (typeof sizeT[2] === 'number') ? sizeT[2] : (sizeT.Z || 1);
+
+      // COLOR (expect normalized 0..1) - support Color or C
+      const colT = blockData.C || blockData.Color;
+      // allow Color as object with R/G/B as well
+      let r=1,g=1,b=1;
+      if(colT){
+        if(Array.isArray(colT)){
+          r = (typeof colT[0] === 'number') ? colT[0] : (colT.R || 1);
+          g = (typeof colT[1] === 'number') ? colT[1] : (colT.G || 1);
+          b = (typeof colT[2] === 'number') ? colT[2] : (colT.B || 1);
+        } else if(typeof colT === 'object'){
+          r = (typeof colT.R === 'number') ? colT.R : (colT.r || 1);
+          g = (typeof colT.G === 'number') ? colT.G : (colT.g || 1);
+          b = (typeof colT.B === 'number') ? colT.B : (colT.b || 1);
+        }
+        // If values appear in 0..255 range, normalize them to 0..1
+        if(r > 1 || g > 1 || b > 1){
+          r = Math.min(1, r/255);
+          g = Math.min(1, g/255);
+          b = Math.min(1, b/255);
+        }
+      }
+
+      // optional flags with defaults: E=false, T=0, K=true, A=true
+      const editable = (blockData.E !== undefined) ? !!blockData.E : (blockData.Editable !== undefined ? !!blockData.Editable : false);
+      const transparency = (typeof blockData.T === 'number') ? blockData.T : (typeof blockData.Transparency === 'number' ? blockData.Transparency : 0);
+      const canCollide = (blockData.K !== undefined) ? !!blockData.K : (blockData.CanCollide !== undefined ? !!blockData.CanCollide : true);
+      const anchored = (blockData.A !== undefined) ? !!blockData.A : (blockData.Anchored !== undefined ? !!blockData.Anchored : true);
+
+      const materialName = blockData.M || blockData.Material || null;
+
+      const normalized = {
+        P: [Math.round(px), Math.round(py), Math.round(pz)],
+        S: [Math.round(sx), Math.round(sy), Math.round(sz)]
+      };
+      // include color only if present in source
+      if(colT) normalized.C = [r,g,b];
+      if(materialName) normalized.M = materialName;
+      if(editable === true) normalized.E = true;
+      if(typeof transparency === 'number' && transparency > 0) normalized.T = transparency;
+      if(canCollide === false) normalized.K = false;
+      if(anchored === false) normalized.A = false;
+
+      out.push(normalized);
+    });
+    return out;
+  }
+  // --- end normalize helper ---
+
   applyJsonBtn.addEventListener("click", ()=>{
     let parsed;
     try{
@@ -354,6 +477,9 @@ export function wireUI(editor){
       return;
     }
 
+    // Normalize imported forms (support Position/Size/Color/Anchored/CanCollide/Transparency/Editable/Material)
+    const normalized = normalizeImportedArray(parsed);
+
     // Clear existing blocks
     while(editor.blocksGroup.children.length) {
       const c = editor.blocksGroup.children[0];
@@ -364,39 +490,41 @@ export function wireUI(editor){
     editor.setSelected(null);
     editor.removeGrowHandles();
 
-    // Recreate blocks from parsed array
-    parsed.forEach(blockData=>{
+    // Recreate blocks from parsed array (use normalized array)
+    normalized.forEach(blockData=>{
       try{
         if(typeof blockData !== 'object') return;
 
         // POSITION
-        const posT = blockData.P || blockData.Position || blockData.Pos;
+        const posT = blockData.P;
         if(!posT) return;
         const px = (typeof posT[0] === 'number') ? posT[0] : (posT.X || 0);
         const py = (typeof posT[1] === 'number') ? posT[1] : (posT.Y || 0);
         const pz = (typeof posT[2] === 'number') ? posT[2] : (posT.Z || 0);
 
         // SIZE
-        const sizeT = blockData.S || blockData.Size;
+        const sizeT = blockData.S;
         if(!sizeT) return;
         const sx = (typeof sizeT[0] === 'number') ? sizeT[0] : (sizeT.X || 1);
         const sy = (typeof sizeT[1] === 'number') ? sizeT[1] : (sizeT.Y || 1);
         const sz = (typeof sizeT[2] === 'number') ? sizeT[2] : (sizeT.Z || 1);
 
         // COLOR (expect normalized 0..1)
-        const colT = blockData.C || blockData.Color;
-        if(!colT) return;
-        const r = (typeof colT[0] === 'number') ? colT[0] : (colT.R || 1);
-        const g = (typeof colT[1] === 'number') ? colT[1] : (colT.G || 1);
-        const b = (typeof colT[2] === 'number') ? colT[2] : (colT.B || 1);
+        const colT = blockData.C;
+        let r = null, g = null, b = null;
+        if(colT && Array.isArray(colT)){
+          r = (typeof colT[0] === 'number') ? colT[0] : (colT.R || 1);
+          g = (typeof colT[1] === 'number') ? colT[1] : (colT.G || 1);
+          b = (typeof colT[2] === 'number') ? colT[2] : (colT.B || 1);
+        }
 
         // optional flags with defaults: E=false, T=0, K=true, A=true
-        const editable = (blockData.E !== undefined) ? !!blockData.E : (blockData.Editable || false);
-        const transparency = (typeof blockData.T === 'number') ? blockData.T : (blockData.Transparency || 0);
-        const canCollide = (blockData.K !== undefined) ? !!blockData.K : ( (blockData.CanCollide!==undefined) ? !!blockData.CanCollide : true );
-        const anchored = (blockData.A !== undefined) ? !!blockData.A : ( (blockData.Anchored!==undefined) ? !!blockData.Anchored : true );
+        const editable = (blockData.E !== undefined) ? !!blockData.E : false;
+        const transparency = (typeof blockData.T === 'number') ? blockData.T : 0;
+        const canCollide = (blockData.K !== undefined) ? !!blockData.K : true;
+        const anchored = (blockData.A !== undefined) ? !!blockData.A : true;
 
-        const materialName = blockData.M || blockData.Material || null;
+        const materialName = blockData.M || null;
 
         // determine material or color to pass to editor.placeBlockAt
         let materialOrColor = null;
@@ -404,13 +532,18 @@ export function wireUI(editor){
         if(materialName && editor.materials && editor.materials[materialName]){
           materialOrColor = editor.materials[materialName].material;
           matName = materialName;
-        } else {
+        } else if(r !== null && g !== null && b !== null){
           materialOrColor = [r,g,b];
+          matName = null;
+        } else {
+          materialOrColor = null;
           matName = null;
         }
 
         // placeBlockAt expects base Y (ground) not center; ensure we pass baseY (center minus half height)
-        const basePy = Math.round(py - (sy/2));
+        // The editor internally applies a +1 offset to incoming base Y, so subtract 1 here
+        // to counter that and make external JSON import align with the editor grid.
+        const basePy = Math.round(py - (sy/2) - 1);
 
         if(editor.placeBlockAt){
           // pass extra userData flags via the created mesh's userData after creation
@@ -423,7 +556,7 @@ export function wireUI(editor){
             if(anchored === false) m.userData.A = false;
             // ensure userData.M and C are consistent
             if(matName) m.userData.M = matName;
-            else m.userData.C = [Math.round(r*1000)/1000, Math.round(g*1000)/1000, Math.round(b*1000)/1000];
+            else if(materialOrColor && Array.isArray(materialOrColor)) m.userData.C = [Math.round(r*1000)/1000, Math.round(g*1000)/1000, Math.round(b*1000)/1000];
           }
         }
       }catch(e){}
@@ -496,6 +629,7 @@ export function wireUI(editor){
       material: 'materials',
       setting: 'settings',
       json: 'json',
+      place: 'place',
       destroy: 'destroy' // new mapping for destroy panel
     };
 
@@ -522,7 +656,7 @@ export function wireUI(editor){
     }
   }
   // attach handlers to toolbar (create-safe because toolbar exists in DOM)
-  ['Rescale','Paint','Material','Setting','Json','Destroy'].forEach(n=>{
+  ['Rescale','Paint','Material','Setting','Json','Place','Destroy'].forEach(n=>{
     const id = 'tool'+n;
     const el = document.getElementById(id);
     if(el){
@@ -534,6 +668,43 @@ export function wireUI(editor){
       el.addEventListener('touchstart', (ev)=>{ ev.preventDefault(); setActiveTool(n.toLowerCase()); }, {passive:false});
     }
   });
+
+  // NEW: Place (설치) toggle wiring
+  const placeBtn = document.getElementById('toolPlace');
+  if(placeBtn){
+    const icon = placeBtn.querySelector('img');
+    // default: ON. reflect editor provided initial state if available
+    let isOn = true;
+    if(typeof editor.placeMode === 'boolean') isOn = !!editor.placeMode;
+    function updatePlaceUI(on){
+      isOn = !!on;
+      if(icon) icon.src = isOn ? '/PLACE_ON.png' : '/PLACE_OFF.png';
+      if(isOn){
+        placeBtn.classList.remove('muted');
+        placeBtn.style.opacity = '1.0';
+      } else {
+        placeBtn.classList.add('muted');
+        placeBtn.style.opacity = '0.55';
+      }
+      if(editor.setPlaceMode) editor.setPlaceMode(isOn);
+    }
+    // initialize UI to reflect current editor state
+    updatePlaceUI(isOn);
+    // Clicking Place opens the Place panel in bottom UI instead of toggling directly
+    placeBtn.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      // show bottom UI
+      const uiContainer = document.getElementById('ui');
+      if(uiContainer) uiContainer.classList.add('visible');
+      // show only the place panel
+      document.querySelectorAll('#panels .panel').forEach(p=>{
+        if(p.dataset.area === 'place') p.classList.remove('hidden'); else p.classList.add('hidden');
+      });
+      // scroll palette to top
+      const palette = document.getElementById('palette');
+      if(palette && palette.scrollTo) palette.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   // tooltip behavior: show hover description near mouse for topbar icons
   const tooltip = document.getElementById('toolTip');
@@ -559,6 +730,8 @@ export function wireUI(editor){
 
   // attach mousemove/mouseenter/mouseleave to topbar icons to follow pointer
   document.querySelectorAll('#topbar .toolIcon, #topright .toolIcon').forEach(btn=>{
+    // remove native browser tooltip (title) so only our custom tooltip appears
+    try{ btn.removeAttribute && btn.removeAttribute('title'); }catch(e){}
     btn.addEventListener('mouseenter', (ev)=>{
       showTooltipFor(btn, ev);
       // listen for pointer move to reposition tooltip
@@ -606,6 +779,104 @@ export function wireUI(editor){
   const uiContainerInit = document.getElementById('ui');
   if(uiContainerInit) uiContainerInit.classList.remove('visible');
 
+  // --- NEW: Create Place panel with enable toggle and block-size picker (moved from Paint) ---
+  (function createPlacePanel(){
+    const panelsRoot = document.getElementById('panels');
+    if(!panelsRoot) return;
+    let placePanel = document.getElementById('placePanel');
+    if(!placePanel){
+      placePanel = document.createElement('section');
+      placePanel.id = 'placePanel';
+      placePanel.className = 'panel hidden';
+      placePanel.dataset.area = 'place';
+      const label = document.createElement('label');
+      label.className = 'panelTitle';
+      label.textContent = '설치 (Place)';
+      placePanel.appendChild(label);
+
+      // Toggle row
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.marginTop = '6px';
+      row.style.alignItems = 'center';
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'smallBtn';
+      toggleBtn.textContent = '설치 : 켜기';
+      toggleBtn.style.minWidth = '120px';
+      row.appendChild(toggleBtn);
+
+      const hint = document.createElement('div');
+      hint.style.marginLeft = '8px';
+      hint.style.fontSize = '13px';
+      hint.style.color = 'var(--muted)';
+      hint.textContent = '설치 가능 여부를 전환합니다.';
+      row.appendChild(hint);
+
+      placePanel.appendChild(row);
+
+      // Block size picker (moved here from Paint)
+      const sizeWrapper = document.createElement('div');
+      sizeWrapper.style.display = 'flex';
+      sizeWrapper.style.flexDirection = 'column';
+      sizeWrapper.style.alignItems = 'center';
+      sizeWrapper.style.marginTop = '12px';
+
+      const sizeLabel = document.createElement('div');
+      sizeLabel.style.fontSize = '13px';
+      sizeLabel.style.color = 'var(--muted)';
+      sizeLabel.style.marginBottom = '8px';
+      sizeLabel.textContent = '블록 크기 선택';
+      sizeWrapper.appendChild(sizeLabel);
+
+      const sizeRow = document.createElement('div');
+      sizeRow.style.display = 'flex';
+      sizeRow.style.gap = '8px';
+      [1,3,5].forEach(sz=>{
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'smallBtn';
+        btn.textContent = String(sz);
+        btn.addEventListener('click', ()=>{
+          const sizeEl = document.getElementById('size');
+          if(sizeEl){
+            sizeEl.value = Math.round(sz);
+            sizeEl.dispatchEvent(new Event('change',{bubbles:true}));
+          }
+        });
+        sizeRow.appendChild(btn);
+      });
+      sizeWrapper.appendChild(sizeRow);
+      placePanel.appendChild(sizeWrapper);
+
+      panelsRoot.insertBefore(placePanel, panelsRoot.firstChild);
+
+      // wire toggle button to editor.setPlaceMode and UI icon
+      toggleBtn.addEventListener('click', ()=>{
+        const cur = !!(editor.placeMode);
+        const next = !cur;
+        if(editor.setPlaceMode) editor.setPlaceMode(next);
+        // update text
+        toggleBtn.textContent = next ? '설치 : 켜기' : '설치 : 끄기';
+        // update topbar icon visuals as well
+        const placeIconBtn = document.getElementById('toolPlace');
+        if(placeIconBtn){
+          const icon = placeIconBtn.querySelector('img');
+          if(icon) icon.src = next ? '/PLACE_ON.png' : '/PLACE_OFF.png';
+          if(next){
+            placeIconBtn.classList.remove('muted');
+            placeIconBtn.style.opacity = '1.0';
+          } else {
+            placeIconBtn.classList.add('muted');
+            placeIconBtn.style.opacity = '0.55';
+          }
+        }
+      });
+    }
+  })();
+  // --- end Place panel creation ---
+ 
   // Block contextual menu removed: right-click now deletes a block directly (handled in editor).
   // Block options UI has been removed — change properties by selecting a block and using Paint / Material tools.
   

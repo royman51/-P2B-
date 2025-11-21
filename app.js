@@ -5,20 +5,17 @@ import { startEditor } from "./src/editor.js";
 
 startEditor();
 
-// Play background music (MUS_GAME.wav) in a loop.
-// Try to autoplay; if the browser blocks it, resume on first user gesture.
+// Play background music (MUS_GAME.mp3) in a loop.
+// Try to autoplay only upon user gesture; default state is paused (OFF).
 (function playBackgroundMusic(){
   try{
-    const audio = new Audio('/MUS_GAME.wav');
+    // 🔥 WAV → MP3 로 변경됨
+    const audio = new Audio('/MUS_GAME.mp3');
     audio.loop = true;
     audio.volume = 0.38; // reasonable default volume
-    // Try to play immediately (may be blocked)
-    const tryPlay = () => {
-      audio.play().catch(()=>{ /* ignore interdicted autoplay until user gesture */ });
-    };
-    tryPlay();
 
-    // If not playing, resume on first user gesture then remove listeners
+    // Do NOT attempt immediate autoplay to keep default state as "off".
+    // Instead, resume/play on first user gesture.
     const resume = () => {
       audio.play().catch(()=>{});
       window.removeEventListener('pointerdown', resume);
@@ -36,7 +33,7 @@ startEditor();
 
 // --- Music toggle UI (top-left) wiring ---
 // If the DOM element exists, wire it to control the background audio.
-// Default state: ON (uses MUS_ON.png and "음악 : 켜짐")
+// Default state: OFF (show MUS_OFF image and "음악 : 꺼짐")
 (function wireMusicToggle(){
   function updateUI(isOn){
     const icon = document.getElementById('musicToggleIcon');
@@ -62,9 +59,9 @@ startEditor();
   const init = () => {
     const btn = document.getElementById('musicToggle');
     if(!btn) return;
-    // ensure initial UI reflects playing state (default ON)
+    // ensure initial UI reflects playing state (default OFF)
     const audio = window.__backgroundMusic;
-    const isPlaying = audio ? !audio.paused : true;
+    const isPlaying = audio ? !audio.paused : false;
     updateUI(isPlaying);
 
     btn.addEventListener('click', (ev) => {
